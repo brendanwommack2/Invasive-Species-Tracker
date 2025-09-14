@@ -4,42 +4,133 @@
     <title>Invasive Species Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        #map { height: 400px; width: 100%; margin-top: 20px; }
-        form { margin-bottom: 20px; }
-        input { margin-bottom: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center; /* Center everything inside body */
+            margin: 0;
+            padding: 0 20px;
+        }
+
+        h1 {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        form {
+            margin-bottom: 20px;
+            display: inline-block; /* Make the form shrink to content and center */
+            text-align: left; /* Keep labels/inputs aligned left inside form */
+        }
+
+        input, textarea, button {
+            display: block;
+            margin: 5px 0;
+            width: 100%;
+            max-width: 400px;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        #map {
+            height: 400px;
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto; /* center map */
+        }
     </style>
 </head>
 <body>
     <h1>Invasive Species Tracker</h1>
 
     <form method="POST">
-        Species: <input type="text" name="species" required><br>
-        Latitude: <input type="text" name="lat" required><br>
-        Longitude: <input type="text" name="lon" required><br>
-        Notes: <input type="text" name="notes"><br>
-        <button type="submit">Report Sighting</button>
+    Species:
+    <select name="species" id="species-select" required>
+        <option value="">-- Select a species --</option>
+        {% for species in allowed_species %}
+            <option value="{{ species }}">{{ species }}</option>
+        {% endfor %}
+    </select><br>
+
+    Latitude: <input type="number" step="any" name="lat" min="-90" max="90" required><br>
+    Longitude: <input type="number" step="any" name="lon" min="-180" max="180" required><br>
+    Notes: <textarea name="notes" maxlength="500"></textarea><br>
+    <button type="submit">Report Sighting</button>
     </form>
+
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        // Initialize map (centered roughly on the US)
-        var map = L.map('map').setView([37.8, -96], 4);
+        // Initialize map
+        var map = L.map('map', {
+            center: [37.8, -96],
+            zoom: 4,
+            maxBoundsViscosity: 0.8
+        });
 
-        // OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // Load sightings from Flask (ensure JSON is safe)
         var sightings = {{ sightings | tojson | safe }};
 
-        // Add markers
         sightings.forEach(function(s) {
             L.marker([s.lat, s.lon]).addTo(map)
                 .bindPopup(`<b>${s.species}</b><br>${s.notes}`);
         });
+
+        // Click-to-add feature: fills form with clicked coordinates
+        map.on('click', function(e) {
+            document.querySelector('input[name="lat"]').value = e.latlng.lat.toFixed(5);
+            document.querySelector('input[name="lon"]').value = e.latlng.lng.toFixed(5);
+        });
     </script>
+
+    <script>
+    fetch('/species')
+        .then(response => response.json())
+        .then(data => {
+            const datalist = document.getElementById('species-list');
+            data.forEach(species => {
+                const option = document.createElement('option');
+                option.value = species;
+                datalist.appendChild(option);
+            });
+        });
+    </script>
+
+    <script>
+function setupSearchableDropdown(selectId) {
+    const select = document.getElementById(selectId);
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search species...';
+    searchInput.style.width = '100%';
+    searchInput.style.maxWidth = '400px';
+    searchInput.style.marginBottom = '5px';
+
+    select.parentNode.insertBefore(searchInput, select);
+
+    searchInput.addEventListener('input', function() {
+        const filter = searchInput.value.toLowerCase();
+        for (let i = 0; i < select.options.length; i++) {
+            const option = select.options[i];
+            const text = option.text.toLowerCase();
+            option.style.display = text.includes(filter) ? '' : 'none';
+        }
+    });
+}
+
+// Call it for our species select
+setupSearchableDropdown('species-select');
+</script>
+
+
+    <!-- Developer Only: Clear Database -->
+<form method="POST" action="/clear" onsubmit="return confirm('Are you sure you want to delete all sightings?');">
+    <button type="submit" style="background:red; color:white;">Clear All Sightings (Dev Only)</button>
+</form>
+
 </body>
 </html>
